@@ -8,12 +8,6 @@ A CLI tool to make the docbase more convenience!
 go get github.com/kyoh86/docbase
 ```
 
-# LICENSE
-
-[![MIT License](http://img.shields.io/badge/license-MIT-blue.svg)](http://www.opensource.org/licenses/MIT)
-
-This is distributed under the [MIT License](http://www.opensource.org/licenses/MIT).
-
 ## Usage
 
 ```
@@ -40,3 +34,9 @@ docbase --token=TOKEN --domain=DOMAIN tags edit howto:manual foo:bar
 This tool is still incomplete...
 
 Please contribute to create new functions.
+
+# LICENSE
+
+[![MIT License](http://img.shields.io/badge/license-MIT-blue.svg)](http://www.opensource.org/licenses/MIT)
+
+This is distributed under the [MIT License](http://www.opensource.org/licenses/MIT).

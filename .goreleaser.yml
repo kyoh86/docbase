@@ -4,7 +4,9 @@ release:
     owner: kyoh86
     name: docbase
 brew:
-  install: bin.install "docbase"
+  install: |
+    bin.install "docbase"
+    man1.install "docbase.1"
   github:
     owner: kyoh86
     name: homebrew-tap
@@ -22,9 +24,11 @@ builds:
   main: .
   ldflags: -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
   binary: docbase
+  hooks:
+    pre: make man
 archive:
   format: tar.gz
-  name_template: "'{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'"
+  name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
   files:
   - licence*
   - LICENCE*
@@ -34,5 +38,6 @@ archive:
   - README*
   - changelog*
   - CHANGELOG*
+  - docbase.1
 snapshot:
   name_template: SNAPSHOT-{{ .Commit }}
