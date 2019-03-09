@@ -40,8 +40,7 @@ func main() {
 
 	postsGetCMD := postsCMD.Command("get", "get a post")
 	var postsGetOpt struct {
-		ID     int64
-		Format string
+		ID int64
 	}
 	postsGetCMD.Flag("format", "format to show a post").Default("{{.Title}}").StringVar(&postsListOpt.Format)
 	postsGetCMD.Arg("id", "post id").Required().Int64Var(&postsGetOpt.ID)
