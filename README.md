@@ -22,16 +22,51 @@ Pass a API token with `--token=TOKEN` flag or an environment variable `DOCBASE_A
 
 ## Functions
 
+### Coverage Status
+
+| Service | Function | Implemented |
+| --- | --- | --- |
+| Post | List | ☑ |
+| Post | Create | ☐ |
+| Post | Get | ☑ |
+| Post | Edit | ☐ |
+| Post | Archive | ☐ |
+| Post | Unarchive | ☐ |
+| Post | Delete | ☐ |
+| User | List | ☐ |
+| Comment | Create | ☐ |
+| Comment | Delete | ☐ |
+| Attachment | Upload | ☐ |
+| Tag | List | ☑ |
+| Tag | Edit | ☑ |
+| Group | Create | ☐ |
+| Group | Get | ☐ |
+| Group | List | ☐ |
+| Group | AddUsers | ☐ |
+| Group | RemoveUsers | ☐ |
+
+* List Posts
+
+```
+docbase --token=TOKEN --domain=DOMAIN post list [--query <QUERY>] [--format <FORMAT>] [--page <PAGE>] [--per-page <PER_PAGE>]
+```
+
+* Get a post
+
+```
+docbase --token=TOKEN --domain=DOMAIN post get <POST_ID>
+```
+
 * List tags
 
 ```
-docbase --token=TOKEN --domain=DOMAIN tags list
+docbase --token=TOKEN --domain=DOMAIN tag list
 ```
 
 * Edit tags (i.e. all `howto` tags to `manual` and `foo` to `bar`)
 
 ```
-docbase --token=TOKEN --domain=DOMAIN tags edit howto:manual foo:bar
+docbase --token=TOKEN --domain=DOMAIN tag edit howto:manual foo:bar
 ```
 
 This tool is still incomplete...

@@ -9,7 +9,8 @@ import (
 
 	"github.com/alecthomas/kingpin"
 	"github.com/alecthomas/template"
-	"github.com/kyoh86/go-docbase/docbase"
+	"github.com/kyoh86/go-docbase/v2/docbase"
+	"github.com/kyoh86/go-docbase/v2/docbase/postquery"
 )
 
 // nolint
@@ -19,40 +20,38 @@ var (
 	date    = "snapshot"
 )
 
-func setConfigFlag(cmd *kingpin.CmdClause, token, domainFlag *string) {
-	cmd.Flag("token", "a token to access docbase API. more: https://help.docbase.io/posts/45703#%E3%82%A2%E3%82%AF%E3%82%BB%E3%82%B9%E3%83%88%E3%83%BC%E3%82%AF%E3%83%B3").Envar("DOCBASE_API_TOKEN").Required().StringVar(token)
-	cmd.Flag("domain", "a domain of docbase team.").Envar("DOCBASE_DOMAIN").Required().StringVar(domainFlag)
-}
-
-func wrapCommand(cmd *kingpin.CmdClause, f func(context.Context, docbase.Domain, *docbase.Client) error) (string, func() error) {
-	var token string
-	var domain string
-	setConfigFlag(cmd, &token, &domain)
-
-	return cmd.FullCommand(), func() error {
-		dbtrans := &docbase.TokenTransport{Token: token}
-		client := docbase.NewClient(dbtrans.Client())
-		return f(context.Background(), docbase.Domain(domain), client)
-	}
-}
+type subCommand func(context.Context, *docbase.Client) error
 
 func main() {
 	app := kingpin.New("docbase", "A CLI tool to make the docbase more convenience!").Version(version).Author("kyoh86")
+	var token string
+	var domain string
+	app.Flag("token", "a token to access docbase API. more: https://help.docbase.io/posts/45703#%E3%82%A2%E3%82%AF%E3%82%BB%E3%82%B9%E3%83%88%E3%83%BC%E3%82%AF%E3%83%B3").Envar("DOCBASE_API_TOKEN").Required().StringVar(&token)
+	app.Flag("domain", "a domain of docbase team.").Envar("DOCBASE_DOMAIN").Required().StringVar(&domain)
+
 	app.Command("post", "manipulate posts").Alias("posts")
 	app.Command("tag", "manipulate tags").Alias("tags")
 
-	cmds := map[string]func() error{}
+	cmds := map[string]subCommand{}
 
-	for _, f := range []func(*kingpin.Application) (string, func() error){} {
+	for _, f := range []func(*kingpin.Application) (*kingpin.CmdClause, subCommand){
+		postList,
+		postGet,
+		tagList,
+		tagEdit,
+	} {
 		key, run := f(app)
-		cmds[key] = run
+		cmds[key.FullCommand()] = run
 	}
-	if err := cmds[kingpin.MustParse(app.Parse(os.Args[1:]))](); err != nil {
+
+	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
+	client := docbase.NewAuthClient(domain, token)
+	if err := cmds[cmd](context.Background(), client); err != nil {
 		log.Fatalf("error: %s", err)
 	}
 }
 
-func postList(app *kingpin.Application) (string, func() error) {
+func postList(app *kingpin.Application) (*kingpin.CmdClause, subCommand) {
 	cmd := app.GetCommand("post").Command("list", "listup posts").Alias("search")
 	var opt struct {
 		Query   string
@@ -65,18 +64,18 @@ func postList(app *kingpin.Application) (string, func() error) {
 	cmd.Flag("format", "format to show a post").Default("{{.Title}}").StringVar(&opt.Format)
 	cmd.Arg("query", "searching query").Default("*").StringVar(&opt.Query)
 
-	return wrapCommand(cmd, func(ctx context.Context, domain docbase.Domain, client *docbase.Client) error {
+	return cmd, func(ctx context.Context, client *docbase.Client) error {
 		format, err := template.New("post").Parse(opt.Format)
 		if err != nil {
 			return err
 		}
-		posts, _, err := client.Post.List(ctx, domain, &docbase.PostListOptions{
-			Query: opt.Query,
-			ListOptions: docbase.ListOptions{
-				Page:    opt.Page,
-				PerPage: opt.PerPage,
-			},
-		})
+		posts, _, err := client.
+			Post.
+			List().
+			Query(opt.Query).
+			Page(int64(opt.Page)).
+			PerPage(int64(opt.PerPage)).
+			Do(ctx)
 		if err != nil {
 			return err
 		}
@@ -88,10 +87,10 @@ func postList(app *kingpin.Application) (string, func() error) {
 			fmt.Println()
 		}
 		return nil
-	})
+	}
 }
 
-func postGet(app *kingpin.Application) (string, func() error) {
+func postGet(app *kingpin.Application) (*kingpin.CmdClause, subCommand) {
 	cmd := app.GetCommand("post").Command("get", "get a post")
 	var opt struct {
 		ID     int64
@@ -100,12 +99,12 @@ func postGet(app *kingpin.Application) (string, func() error) {
 	cmd.Flag("format", "format to show a post").Default("{{.Title}}").StringVar(&opt.Format)
 	cmd.Arg("id", "post id").Required().Int64Var(&opt.ID)
 
-	return wrapCommand(cmd, func(ctx context.Context, domain docbase.Domain, client *docbase.Client) error {
+	return cmd, func(ctx context.Context, client *docbase.Client) error {
 		format, err := template.New("post").Parse(opt.Format)
 		if err != nil {
 			return err
 		}
-		post, _, err := client.Post.Get(ctx, domain, docbase.PostID(opt.ID))
+		post, _, err := client.Post.Get(docbase.PostID(opt.ID)).Do(ctx)
 		if err != nil {
 			return err
 		}
@@ -114,13 +113,13 @@ func postGet(app *kingpin.Application) (string, func() error) {
 		}
 		fmt.Println()
 		return nil
-	})
+	}
 }
 
-func tagList(app *kingpin.Application) (string, func() error) {
+func tagList(app *kingpin.Application) (*kingpin.CmdClause, subCommand) {
 	cmd := app.GetCommand("tag").Command("list", "listup tags").Alias("ls")
-	return wrapCommand(cmd, func(ctx context.Context, domain docbase.Domain, client *docbase.Client) error {
-		tags, _, err := client.Tag.List(ctx, domain, nil)
+	return cmd, func(ctx context.Context, client *docbase.Client) error {
+		tags, _, err := client.Tag.List().Do(ctx)
 		if err != nil {
 			return err
 		}
@@ -128,10 +127,10 @@ func tagList(app *kingpin.Application) (string, func() error) {
 			fmt.Println(t.Name)
 		}
 		return nil
-	})
+	}
 }
 
-func tagEdit(app *kingpin.Application) (string, func() error) {
+func tagEdit(app *kingpin.Application) (*kingpin.CmdClause, subCommand) {
 	cmd := app.GetCommand("tag").Command("edit", "edit a tag")
 	var opt struct {
 		Tags map[string]string
@@ -139,27 +138,35 @@ func tagEdit(app *kingpin.Application) (string, func() error) {
 	opt.Tags = map[string]string{}
 	cmd.Arg("tags", "tags map to edit").Required().StringMapVar(&opt.Tags)
 
-	return wrapCommand(cmd, func(ctx context.Context, domain docbase.Domain, client *docbase.Client) error {
-		for old, new := range opt.Tags {
-			posts, _, err := client.Post.List(ctx, domain, &docbase.PostListOptions{Query: fmt.Sprintf("tag:%s", old)})
+	return cmd, func(ctx context.Context, client *docbase.Client) error {
+		for oldOne, newOne := range opt.Tags {
+			posts, _, err := client.
+				Post.
+				List().
+				Query(postquery.Tag(oldOne)).
+				Do(ctx)
 			if err != nil {
 				return err
 			}
 			for _, p := range posts {
-				edit := docbase.PostEditRequest{}
+				tags := make([]string, 0, len(p.Tags))
 				for _, t := range p.Tags {
-					if old == t.Name {
-						edit.Tags = append(edit.Tags, new)
+					if oldOne == t.Name {
+						tags = append(tags, newOne)
 					} else {
-						edit.Tags = append(edit.Tags, t.Name)
+						tags = append(tags, t.Name)
 					}
 				}
-				_, _, err := client.Post.Edit(ctx, domain, p.ID, &edit)
+				_, _, err := client.
+					Post.
+					Edit(p.ID).
+					Tags(tags).
+					Do(ctx)
 				if err != nil {
 					return err
 				}
 			}
 		}
 		return nil
-	})
+	}
 }
