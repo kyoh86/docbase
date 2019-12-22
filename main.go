@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"strings"
 
 	"log"
 	"os"
@@ -20,7 +22,7 @@ var (
 	date    = "snapshot"
 )
 
-type subCommand func(context.Context, *docbase.Client) error
+type subCommand func(context.Context, string, *docbase.Client) error
 
 func main() {
 	app := kingpin.New("docbase", "A CLI tool to make the docbase more convenience!").Version(version).Author("kyoh86")
@@ -36,6 +38,7 @@ func main() {
 
 	for _, f := range []func(*kingpin.Application) (*kingpin.CmdClause, subCommand){
 		postList,
+		postSearch,
 		postGet,
 		tagList,
 		tagEdit,
@@ -46,13 +49,55 @@ func main() {
 
 	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
 	client := docbase.NewAuthClient(domain, token)
-	if err := cmds[cmd](context.Background(), client); err != nil {
+	if err := cmds[cmd](context.Background(), domain, client); err != nil {
 		log.Fatalf("error: %s", err)
 	}
 }
 
+func postSearch(app *kingpin.Application) (*kingpin.CmdClause, subCommand) {
+	cmd := app.GetCommand("post").Command("search", "search words from posts")
+	var opt struct {
+		Query  string
+		Format string
+	}
+	// cmd.Flag("format", "format to show a post").Default("{{.Title}}").StringVar(&opt.Format)
+	cmd.Arg("query", "searching query").Required().StringVar(&opt.Query)
+
+	return cmd, func(ctx context.Context, domain string, client *docbase.Client) error {
+		posts, _, err := client.
+			Post.
+			List().
+			Query(postquery.Join(
+				postquery.Title(opt.Query),
+				postquery.Or(),
+				postquery.Body(opt.Query),
+			)).
+			Do(ctx)
+		if err != nil {
+			return err
+		}
+		for _, p := range posts {
+			find(domain, p.ID, 0, p.Title, opt.Query)
+
+			scanner := bufio.NewScanner(strings.NewReader(p.Body))
+			for i := 1; scanner.Scan(); i++ {
+				text := scanner.Text()
+				find(domain, p.ID, i, text, opt.Query)
+			}
+		}
+		return nil
+	}
+}
+
+func find(domain string, postID docbase.PostID, row int, text, query string) {
+	index := strings.Index(text, query)
+	if index >= 0 {
+		fmt.Printf("%s.docbase.io/posts/%d:%d:%d:%s\n", domain, postID, row, index+1, text)
+	}
+}
+
 func postList(app *kingpin.Application) (*kingpin.CmdClause, subCommand) {
-	cmd := app.GetCommand("post").Command("list", "listup posts").Alias("search")
+	cmd := app.GetCommand("post").Command("list", "listup posts")
 	var opt struct {
 		Query   string
 		Format  string
@@ -64,7 +109,7 @@ func postList(app *kingpin.Application) (*kingpin.CmdClause, subCommand) {
 	cmd.Flag("format", "format to show a post").Default("{{.Title}}").StringVar(&opt.Format)
 	cmd.Arg("query", "searching query").Default("*").StringVar(&opt.Query)
 
-	return cmd, func(ctx context.Context, client *docbase.Client) error {
+	return cmd, func(ctx context.Context, domain string, client *docbase.Client) error {
 		format, err := template.New("post").Parse(opt.Format)
 		if err != nil {
 			return err
@@ -99,7 +144,7 @@ func postGet(app *kingpin.Application) (*kingpin.CmdClause, subCommand) {
 	cmd.Flag("format", "format to show a post").Default("{{.Title}}").StringVar(&opt.Format)
 	cmd.Arg("id", "post id").Required().Int64Var(&opt.ID)
 
-	return cmd, func(ctx context.Context, client *docbase.Client) error {
+	return cmd, func(ctx context.Context, domain string, client *docbase.Client) error {
 		format, err := template.New("post").Parse(opt.Format)
 		if err != nil {
 			return err
@@ -118,7 +163,7 @@ func postGet(app *kingpin.Application) (*kingpin.CmdClause, subCommand) {
 
 func tagList(app *kingpin.Application) (*kingpin.CmdClause, subCommand) {
 	cmd := app.GetCommand("tag").Command("list", "listup tags").Alias("ls")
-	return cmd, func(ctx context.Context, client *docbase.Client) error {
+	return cmd, func(ctx context.Context, domain string, client *docbase.Client) error {
 		tags, _, err := client.Tag.List().Do(ctx)
 		if err != nil {
 			return err
@@ -138,7 +183,7 @@ func tagEdit(app *kingpin.Application) (*kingpin.CmdClause, subCommand) {
 	opt.Tags = map[string]string{}
 	cmd.Arg("tags", "tags map to edit").Required().StringMapVar(&opt.Tags)
 
-	return cmd, func(ctx context.Context, client *docbase.Client) error {
+	return cmd, func(ctx context.Context, domain string, client *docbase.Client) error {
 		for oldOne, newOne := range opt.Tags {
 			posts, _, err := client.
 				Post.
