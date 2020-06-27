@@ -4,6 +4,7 @@ A CLI tool to make the docbase more convenience!
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/kyoh86/docbase)](https://goreportcard.com/report/github.com/kyoh86/docbase)
 [![Coverage Status](https://img.shields.io/codecov/c/github/kyoh86/docbase.svg)](https://codecov.io/gh/kyoh86/docbase)
+[![Release](https://github.com/kyoh86/docbase/workflows/Release/badge.svg)](https://github.com/kyoh86/docbase/releases)
 
 ## Install
 
